@@ -40,6 +40,23 @@
     #fileButtonOverlay:hover {
       opacity: 1;
     }
+    #clearInputOverlay {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      cursor: pointer;
+      background: #fff;
+      padding: 4px 8px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      font-size: 10px;
+      opacity: 0.85;
+      display: none; /* 入力が空のときは非表示 */
+      z-index: 11;
+    }
+    #clearInputOverlay:hover {
+      opacity: 1;
+    }
     #transposeBtn {
       display: block;
       width: 100%;
@@ -117,6 +134,8 @@
       ファイル選択
       <input type="file" id="fileInput" accept=".csv,.tsv" style="display:none;">
     </label>
+
+    <div id="clearInputOverlay">クリア</div>
   </div>
 
   <button id="transposeBtn">転置する</button>
@@ -247,13 +266,34 @@
 
     downloadBtnWide.addEventListener("click", downloadCsv);
 
-    /* ▼ 以下はあなたの元のコード（転置処理など） */
+    /* 入力textareaの状態反映 */
+    const clearInputOverlay = document.getElementById("clearInputOverlay");
+    const fileButtonOverlay = document.getElementById("fileButtonOverlay");
+
+    function updateInputUI() {
+      const hasText = csvInput.value.trim().length > 0;
+
+      clearInputOverlay.style.display = hasText ? "block" : "none";
+      fileButtonOverlay.style.display = hasText ? "none" : "block";
+    }
+
+    // 入力欄の変更を監視
+    csvInput.addEventListener("input", updateInputUI);
+
+    clearInputOverlay.addEventListener("click", () => {
+      csvInput.value = "";
+      csvOutput.value = "";
+      updateInputUI();
+    });
+
+    /* ▼ 転置処理など */
     function loadFile(file) {
       const reader = new FileReader();
       reader.onload = (e) => {
         let text = e.target.result;
         if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         csvInput.value = text;
+        updateInputUI();
       };
       reader.readAsText(file, "utf-8");
     }
