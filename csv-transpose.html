@@ -4,42 +4,55 @@
   <meta charset="UTF-8">
   <title>CSV/TSV 転置ツール</title>
   <style>
-    textarea {
-      white-space: pre;        /* 改行は尊重、折り返しなし */
-      overflow-x: auto;        /* 横スクロールバー */
-      overflow-y: auto;        /* 縦スクロールバー */
-      font-family: monospace;  /* 表構造が見やすくなる */
+    #csvOutput {
+      white-space: pre;
+      overflow-x: auto;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+    #csvInput {
+      white-space: pre;
+      overflow-x: auto;
+      overflow-y: auto;
+      font-family: monospace;
+      border: 2px solid #ccc;
+      padding: 5px;
+    }
+    #csvInput.dragover {
+      background-color: #eef;
+      border-color: #44f;
     }
   </style>
 </head>
 <body>
-  <h1>CSV/TSV 転置ツール（クライアントサイドのみ）</h1>
-
-  <h2>1. CSVファイルを選択（BOM付き対応）</h2>
-  <input type="file" id="fileInput" accept=".csv,.tsv">
-
-  <h2>2. または、CSV/TSV を貼り付け</h2>
-  <textarea id="csvInput" rows="10" cols="80" placeholder="ここにCSV/TSVを貼り付け"></textarea>
-
-  <h2>3. 出力形式（テキストエリア／クリップボード）</h2>
-  <label>
-    <input type="radio" name="format" value="tsv" checked>
-    TSV（Excel向け・デフォルト）
-  </label>
-  <label>
-    <input type="radio" name="format" value="csv">
-    CSV
-  </label>
-
+  <h2>入力: CSV/TSV を貼り付け（ドラッグ＆ドロップ可）またはファイル選択</h2>
+  <textarea id="csvInput" rows="10" cols="80"
+    placeholder="ここにCSV/TSVを貼り付け、またはファイルをドラッグ＆ドロップ"></textarea>
   <div>
-    <button id="transposeBtn">転置する</button>
+    <input type="file" id="fileInput" accept=".csv,.tsv">
   </div>
 
   <h2>転置結果</h2>
-  <textarea id="csvOutput" rows="10" cols="80" readonly></textarea>
+  <p>
+    <button id="transposeBtn">転置する</button>
+  </p>
 
+  <textarea id="csvOutput" rows="10" cols="80" readonly
+    placeholder="転置実行ボタンを押すと結果がここに表示されます"
+  ></textarea>
   <div>
-    <button id="downloadBtn">CSVとしてダウンロード（常にCSV）</button>
+    <div>
+      クリップボードの形式:
+      <label>
+        <input type="radio" name="format" value="tsv" checked>
+        TSV（Excel向け・デフォルト）
+      </label>
+      <label>
+        <input type="radio" name="format" value="csv">
+        CSV
+      </label>
+    </div>
+    <button id="downloadBtn">CSVとしてダウンロード（常にBOM付き）</button>
     <button id="copyBtn">クリップボードにコピー（選択形式）</button>
   </div>
 
@@ -52,10 +65,7 @@
     const copyBtn = document.getElementById('copyBtn');
 
     // ファイル読み込み（BOM対応）
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-
+    function loadFile(file) {
       const reader = new FileReader();
       reader.onload = (e) => {
         let text = e.target.result;
@@ -68,37 +78,36 @@
         csvInput.value = text;
       };
       reader.readAsText(file, 'utf-8');
+    }
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) loadFile(file);
     });
 
-    // 選択された区切り文字を取得
+    // textarea にドラッグ＆ドロップ対応
+    csvInput.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      csvInput.classList.add('dragover');
+    });
+
+    csvInput.addEventListener('dragleave', () => {
+      csvInput.classList.remove('dragover');
+    });
+
+    csvInput.addEventListener('drop', (e) => {
+      e.preventDefault();
+      csvInput.classList.remove('dragover');
+
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
+
+    // 出力形式の区切り文字
     function getSelectedDelimiter() {
       const format = document.querySelector('input[name="format"]:checked').value;
       return format === 'tsv' ? '\t' : ',';
     }
-
-    // 転置ボタン
-    transposeBtn.addEventListener('click', () => {
-      const inputText = csvInput.value.trim();
-      if (!inputText) {
-        alert('CSV/TSVを入力してください');
-        return;
-      }
-
-      // ダブルクォート検出（未サポート）
-      if (inputText.includes('"')) {
-        alert('ダブルクォートを含むCSVは未サポートです');
-        return;
-      }
-
-      const delimiter = detectDelimiter(inputText);
-      const transposed = transposeCsv(inputText, delimiter);
-
-      // 出力は選択された形式で
-      const outputDelimiter = getSelectedDelimiter();
-      const converted = convertDelimiter(transposed, delimiter, outputDelimiter);
-
-      csvOutput.value = converted;
-    });
 
     // 入力の区切り文字を自動判定（TSV優先）
     function detectDelimiter(text) {
@@ -130,11 +139,34 @@
     }
 
     // 区切り文字変換
-    function convertDelimiter(rows, fromDelim, toDelim) {
+    function convertDelimiter(rows, toDelim) {
       return rows.map(row => row.join(toDelim)).join('\r\n');
     }
 
-    // ダウンロード（常に CSV）
+    // 転置ボタン
+    transposeBtn.addEventListener('click', () => {
+      const inputText = csvInput.value.trim();
+      if (!inputText) {
+        alert('CSV/TSVを入力してください');
+        return;
+      }
+
+      // ダブルクォート検出（未サポート）
+      if (inputText.includes('"')) {
+        alert('ダブルクォートを含むCSVは未サポートです');
+        return;
+      }
+
+      const delimiter = detectDelimiter(inputText);
+      const transposed = transposeCsv(inputText, delimiter);
+
+      const outputDelimiter = getSelectedDelimiter();
+      const converted = convertDelimiter(transposed, outputDelimiter);
+
+      csvOutput.value = converted;
+    });
+
+    // ダウンロード（常に BOM 付き CSV）
     downloadBtn.addEventListener('click', () => {
       const text = csvOutput.value;
       if (!text) {
@@ -142,14 +174,13 @@
         return;
       }
 
-      // CSVに強制変換
-      const csvText = convertDelimiter(
-        text.split(/\r?\n/).map(line => line.split(getSelectedDelimiter())),
-        getSelectedDelimiter(),
-        ','
-      );
+      const currentDelim = getSelectedDelimiter();
+      const rows = text.split(/\r?\n/).map(line => line.split(currentDelim));
+      const csvText = convertDelimiter(rows, ',');
 
-      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+      const bom = "\uFEFF";  // UTF-8 BOM
+      const blob = new Blob([bom + csvText], { type: 'text/csv;charset=utf-8;' });
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -160,7 +191,7 @@
       URL.revokeObjectURL(url);
     });
 
-    // クリップボードコピー（選択形式）
+    // クリップボードコピー
     copyBtn.addEventListener('click', async () => {
       const text = csvOutput.value;
       if (!text) {
